@@ -1,0 +1,24 @@
+[project]
+name = "contextdesk-backend"
+version = "0.1.0"
+description = "ContextDesk Lab backend - context engineering playground for Redis Iris"
+readme = "README.md"
+requires-python = ">=3.12"
+dependencies = [
+    "fastapi[standard]>=0.141.1",
+]
+
+# This is a deployed application, not a distributable library, so uv should not
+# try to build or install it into the environment.
+[tool.uv]
+package = false
+
+[dependency-groups]
+dev = [
+    "pytest>=8.3.0",
+    "pytest-asyncio>=0.24.0",
+]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+asyncio_mode = "auto"
