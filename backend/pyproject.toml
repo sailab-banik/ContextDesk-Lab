@@ -6,6 +6,12 @@ readme = "README.md"
 requires-python = ">=3.12"
 dependencies = [
     "fastapi[standard]>=0.141.1",
+    "langcache>=0.14.0",
+    "openai>=3.14.0",
+    "pydantic-settings>=2.15.0",
+    "redis>=8.1.0",
+    "redis-agent-memory>=0.4.0",
+    "redis-context-retriever>=0.0.6",
 ]
 
 # This is a deployed application, not a distributable library, so uv should not
