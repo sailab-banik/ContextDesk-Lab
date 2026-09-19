@@ -16,3 +16,5 @@ node_modules/
 # Local reading notes, not part of the repo
 docs/CODEBASE_GUIDE.md
 docs/FRONTEND_GUIDE.md
+
+.playwright-mcp
