@@ -1,26 +1,131 @@
 @import "tailwindcss";
 
+/*
+ * Neutral desk, colored channels. The interface itself is grey on paper; the
+ * only saturated color belongs to the four components, so wherever a color
+ * appears it names one of them.
+ */
 :root {
-  --background: #ffffff;
-  --foreground: #171717;
-}
+  color-scheme: light;
 
-@theme inline {
-  --color-background: var(--background);
-  --color-foreground: var(--foreground);
-  --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
+  --paper: #f3f4f6;
+  --surface: #ffffff;
+  --surface-sunk: #f7f8fa;
+  --ink: #14161b;
+  --ink-soft: #4b5160;
+  --ink-faint: #666c7a;
+  --rule: #e2e5ea;
+  --rule-strong: #cbd0d8;
+
+  /* Component channels: validated together (dataviz palette, all-pairs, both modes). */
+  --memory: #e87ba4;
+  --retrieval: #008300;
+  --cache: #eda100;
+  --llm: #2a78d6;
+
+  --critical: #d03b3b;
+  --critical-ink: #b42323;
 }
 
 @media (prefers-color-scheme: dark) {
   :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
+    color-scheme: dark;
+
+    --paper: #0e0f12;
+    --surface: #17191e;
+    --surface-sunk: #1c1f25;
+    --ink: #eceef2;
+    --ink-soft: #b4b9c4;
+    --ink-faint: #8a909c;
+    --rule: #272b33;
+    --rule-strong: #394049;
+
+    --memory: #d55181;
+    --retrieval: #008300;
+    --cache: #c98500;
+    --llm: #3987e5;
+
+    --critical: #d03b3b;
+    --critical-ink: #ff6b6b;
   }
 }
 
-body {
-  background: var(--background);
-  color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+@theme inline {
+  --color-paper: var(--paper);
+  --color-surface: var(--surface);
+  --color-surface-sunk: var(--surface-sunk);
+  --color-ink: var(--ink);
+  --color-ink-soft: var(--ink-soft);
+  --color-ink-faint: var(--ink-faint);
+  --color-rule: var(--rule);
+  --color-rule-strong: var(--rule-strong);
+  --color-memory: var(--memory);
+  --color-retrieval: var(--retrieval);
+  --color-cache: var(--cache);
+  --color-llm: var(--llm);
+  --color-critical: var(--critical);
+  --color-critical-ink: var(--critical-ink);
+
+  --font-sans: var(--font-atkinson), ui-sans-serif, system-ui, sans-serif;
+  --font-mono: var(--font-atkinson-mono), ui-monospace, "SF Mono", monospace;
+}
+
+/* Layered so that utilities (e.g. a field that draws its own focus state) can override them. */
+@layer base {
+  body {
+    background: var(--paper);
+    color: var(--ink);
+    font-family: var(--font-sans);
+  }
+
+  :focus-visible {
+    outline: 2px solid var(--llm);
+    outline-offset: 2px;
+  }
+
+  ::selection {
+    background: color-mix(in srgb, var(--llm) 25%, transparent);
+  }
+}
+
+/*
+ * The one orchestrated motion: when a record arrives, the stations it passed
+ * through light up in pipeline order, so the path reads as a sequence.
+ */
+@keyframes station-on {
+  from {
+    opacity: 0;
+    transform: scale(0.6);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+.station-light {
+  animation: station-on 260ms cubic-bezier(0.2, 0.8, 0.2, 1) both;
+  animation-delay: calc(var(--step, 0) * 70ms);
+}
+
+@keyframes working {
+  0%,
+  100% {
+    opacity: 0.35;
+  }
+  50% {
+    opacity: 1;
+  }
+}
+
+.working-dot {
+  animation: working 1.2s ease-in-out infinite;
+  animation-delay: calc(var(--step, 0) * 150ms);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .station-light,
+  .working-dot {
+    animation: none;
+  }
 }

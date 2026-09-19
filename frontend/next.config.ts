@@ -1,8 +1,10 @@
 import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
-  /* config options here */
   reactCompiler: true,
+  typedRoutes: true,
+  // Bottom-left would sit on top of the chat composer's component toggles.
+  devIndicators: { position: "bottom-right" },
 };
 
 export default nextConfig;
