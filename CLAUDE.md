@@ -7,8 +7,9 @@ what it makes visible about memory, retrieval, caching, latency, and cost.
 **The invariant:** every AI request produces two things — a user-facing response **and** an
 execution record. Infrastructure stays visible; never hide a component behind the chat.
 
-`PLAN.md` holds the product spec, the demo scenarios, and the build sequence. This file is how to
-work in the repo.
+`PLAN.md` holds the product spec, the demo scenarios, and the build sequence. `docs/` holds the
+architecture (`ARCHITECTURE.md`) and guided readings of the code (`CODEBASE_GUIDE.md` for the
+backend, `FRONTEND_GUIDE.md` for the frontend). This file is how to work in the repo.
 
 ---
 
@@ -65,11 +66,22 @@ backend/
     data/            synthetic data + seed_redis.py
   tests/
 frontend/
-  app/               page.tsx, analytics/, explorer/, layout.tsx
-  components/        chat/ context/ analytics/ explorer/
-  lib/api.ts         backend client
-  types/  hooks/
+  app/               page.tsx (console), compare/, analytics/ + [requestId] (replay), lab/[component]
+  components/        chat/ context/ (inspector) analytics/ compare/ lab/
+  lib/               api.ts (backend client), components.ts (component identity + status), format.ts
+  types/api.ts       mirrors backend/app/models
+  hooks/             use-backend-resource.ts
+docs/                ARCHITECTURE.md, CODEBASE_GUIDE.md (backend), FRONTEND_GUIDE.md
 ```
+
+### UI conventions
+
+- Each component owns one color (`--memory`, `--retrieval`, `--cache`, `--llm` in `globals.css`),
+  used everywhere it appears. The four were validated together for colorblind separation in both
+  themes; don't swap one without re-validating the set.
+- Status is carried by fill, never by hue: solid = `ok`, half-filled = `stub`, hollow = off or
+  skipped, red cross = `unavailable` (`components/status.tsx`). "Off" (the request's config turned
+  it off) and "Skipped" (a cache hit made it unnecessary) are told apart via `execution_config`.
 
 ---
 
@@ -168,6 +180,7 @@ hardcoded in application code.
 | `LANGCACHE_ENDPOINT`, `LANGCACHE_ID`, `LANGCACHE_KEY` | `app/cache/` |
 | `AGENT_MEMORY_ENDPOINT`, `AGENT_MEMORY_STORE_ID`, `AGENT_MEMORY_KEY` | `app/memory/` |
 | `CONTEXT_RETRIEVER_AGENT_KEY` | `app/retrieval/` |
+| `NEXT_PUBLIC_API_URL` | `frontend/lib/api.ts`. Optional, defaults to `http://localhost:8000`. Next reads it from `frontend/.env.local`, not the root `.env` |
 
 Execution configuration (`memory_enabled`, `retrieval_enabled`, `cache_enabled`) is passed
 explicitly on every request. No hidden global behavior.

@@ -44,8 +44,14 @@ Run `uv run python -m app.data.seed_redis` first, then register:
 | Customer | `customer:{id}` | `region` TAG, `name` TEXT |
 | Subscription | `subscription:{id}` | `customer_id` TAG, `plan` TAG, `api_limit` NUMERIC |
 | ApiUsage | `api_usage:{id}` | `customer_id` TAG, `requests_today` NUMERIC, `average_latency` NUMERIC |
-| SupportTicket | `ticket:{id}` | `customer_id` TAG, `status` TAG, `issue_type` TEXT |
+| Ticket | `ticket:{id}` | `customer_id` TAG, `status` TAG, `issue_type` TEXT |
 | Incident | `incident:{id}` | `region` TAG, `status` TAG, `description` TEXT |
+
+The entity name is what the generated tool is named after, not the Python class: the ticket entity
+is registered as `Ticket` (not `SupportTicket`) so the generated tool matches
+`TOOL_FILTER_TICKETS` in `app/retrieval/context_retriever_client.py`. Whatever the console actually
+generates wins — `await UnifiedClient().list_tools(agent_key)` shows it, and the five `TOOL_*`
+constants are the one place to correct.
 
 A field belongs to exactly one index — marking it both TAG and TEXT errors. The index type decides
 which tool is generated (`TAG` → `filter_…`, `TEXT` → `search_…_by_text`, `NUMERIC` → `find_…_range`).

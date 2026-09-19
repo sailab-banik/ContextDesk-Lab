@@ -12,3 +12,6 @@ node_modules/
 
 # macOS
 .DS_Store
+
+# Local reading notes, not part of the repo
+docs/CODEBASE_GUIDE.md
