@@ -19,6 +19,7 @@ backend, `FRONTEND_GUIDE.md` for the frontend). This file is how to work in the 
 |---|---|
 | Run backend (`:8000`) | `cd backend && uv run fastapi dev app/main.py` |
 | Run frontend (`:3000`) | `cd frontend && npm run dev` |
+| Run both in Docker | `docker compose up --build` (backend reads the root `.env` at runtime) |
 | Add / remove Python dep | `uv add <pkg>` · `uv remove <pkg>` |
 | Install Python deps | `uv sync` |
 | Run backend tests | `cd backend && uv run pytest` |

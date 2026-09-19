@@ -44,6 +44,23 @@ npm run dev
 
 Open http://localhost:3000.
 
+### With Docker
+
+```bash
+docker compose up --build     # backend on :8000, frontend on :3000
+```
+
+The backend reads the root `.env` at runtime; the keys are never copied into an
+image. Without a `.env`, everything runs as a stub. The browser calls the
+backend directly at `http://localhost:8000`, and that address is compiled into
+the frontend bundle, so changing it means rebuilding the frontend image. The
+seed scripts run inside the backend image too:
+
+```bash
+docker compose run --rm backend python -m app.data.seed_redis
+docker compose run --rm backend python -m app.data.seed_memories
+```
+
 ### Stub mode
 
 No credentials are needed to run it. Any component whose keys are blank or
