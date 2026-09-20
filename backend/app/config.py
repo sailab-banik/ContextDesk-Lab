@@ -42,10 +42,18 @@ class Settings(BaseSettings):
     langcache_endpoint: str = ""
     langcache_id: str = ""
     langcache_key: str = ""
-    # Fixed when the LangCache service is created and not changeable per
-    # request. Recorded here only so the UI can display the threshold a hit or
-    # miss was judged against.
+    # The bar a lookup must clear to count as a hit. Applied in
+    # `app/cache/langcache_client.py` rather than by the service, so it can be
+    # tuned here instead of by recreating the LangCache service. It can only be
+    # lowered as far as the service's own threshold allows — see the search
+    # floor below.
     langcache_similarity_threshold: float = 0.92
+
+    # How wide a lookup searches. Kept below the decision threshold so a miss
+    # still reports the score that produced it; the gap between the two is the
+    # band of near-misses the Context Inspector can show. Raising this to match
+    # the threshold makes every miss scoreless again.
+    langcache_search_floor: float = 0.5
 
     # The stubs score prompts by word overlap, which runs lower than embedding
     # similarity for the same pair, so they judge against their own bar.

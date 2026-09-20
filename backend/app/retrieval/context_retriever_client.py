@@ -16,15 +16,18 @@ from app.retrieval.service import (
 )
 from app.telemetry.timing import Stopwatch
 
-# Context Retriever generates one MCP tool per entity and index type. These
-# names follow the entities registered in the Redis Cloud console (PLAN.md,
-# Milestone 0) — if an entity is registered under a different name, correct it
-# here rather than in the calling code.
+# Context Retriever generates one filter tool per entity, not one per indexed
+# field: the field travels inside the request as a tag condition. Run
+# `python -m app.data.inspect_surface` to see the live list rather than
+# inferring these names.
+#
+# The entity segment is the model class name lowercased, so `ApiUsage` becomes
+# `apiusage` — it does not follow the `api_usage:{id}` key template.
 TOOL_GET_CUSTOMER = "get_customer_by_id"
-TOOL_FILTER_SUBSCRIPTION = "filter_subscription_by_customer_id"
-TOOL_FILTER_API_USAGE = "filter_api_usage_by_customer_id"
-TOOL_FILTER_TICKETS = "filter_ticket_by_customer_id"
-TOOL_FILTER_INCIDENTS = "filter_incident_by_region"
+TOOL_FILTER_SUBSCRIPTION = "filter_subscription"
+TOOL_FILTER_API_USAGE = "filter_apiusage"
+TOOL_FILTER_TICKETS = "filter_ticket"
+TOOL_FILTER_INCIDENTS = "filter_incident"
 
 
 class ContextRetrieverService:
@@ -56,14 +59,26 @@ class ContextRetrieverService:
             (SOURCE_API_USAGE, TOOL_FILTER_API_USAGE),
             (SOURCE_TICKETS, TOOL_FILTER_TICKETS),
         ):
-            sources.append(await self._query(name, tool, {"customer_id": customer_id}))
+            sources.append(
+                await self._query(
+                    name,
+                    tool,
+                    {"customer_id": customer_id},
+                    _tag_condition("customer_id", customer_id),
+                )
+            )
 
         # Incidents are regional, so this source depends on the customer record
         # having come back first.
         region = _first_value(customer_source.records, "region")
         if region:
             sources.append(
-                await self._query(SOURCE_INCIDENTS, TOOL_FILTER_INCIDENTS, {"region": region})
+                await self._query(
+                    SOURCE_INCIDENTS,
+                    TOOL_FILTER_INCIDENTS,
+                    {"region": region},
+                    _tag_condition("region", region),
+                )
             )
 
         failed = [source for source in sources if source.status is ComponentStatus.UNAVAILABLE]
@@ -77,12 +92,24 @@ class ContextRetrieverService:
         )
 
     async def _query(
-        self, name: str, tool: str, arguments: dict[str, str | int | float]
+        self,
+        name: str,
+        tool: str,
+        arguments: dict[str, str | int | float],
+        wire_arguments: dict[str, Any] | None = None,
     ) -> RetrievedSource:
+        """Call one tool and record it as the flat query it represents.
+
+        `arguments` is the field/value pair the inspector shows; the condition
+        envelope a filter tool actually takes is passed separately so that
+        shape stays inside this layer.
+        """
         with Stopwatch() as timer:
             try:
                 response = await self._client.query_tool(
-                    agent_key=self._agent_key, tool_name=tool, arguments=dict(arguments)
+                    agent_key=self._agent_key,
+                    tool_name=tool,
+                    arguments=dict(wire_arguments if wire_arguments is not None else arguments),
                 )
                 records = _unwrap_mcp_results(response)
             except Exception as exc:
@@ -103,6 +130,16 @@ class ContextRetrieverService:
             duration_ms=timer.elapsed_ms,
             status=ComponentStatus.OK,
         )
+
+
+def _tag_condition(field: str, value: str) -> dict[str, Any]:
+    """Wrap one exact-match condition in the shape the filter tools expect.
+
+    Filter tools are per entity, not per field, so the field being matched on
+    travels in the request body rather than in the tool name. Conditions are
+    ANDed; this project only ever needs one.
+    """
+    return {"tag_conditions": [{"field": field, "value": value}]}
 
 
 def _unwrap_mcp_results(response: Any) -> list[dict]:

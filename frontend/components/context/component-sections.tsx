@@ -36,7 +36,7 @@ export function CacheSection({ record }: { record: ExecutionRecord }) {
             <span className="font-semibold">{cache.hit ? "Hit." : "Miss."}</span>{" "}
             <span className="text-ink-soft">
               {cache.similarity == null
-                ? "No cached prompt was close enough to score."
+                ? "No cached prompt scored high enough to be worth reporting."
                 : `Closest cached prompt scored ${formatScore(cache.similarity)}, ${
                     cache.hit ? "at or above" : "below"
                   } the ${formatScore(cache.threshold ?? 0)} threshold.`}
@@ -59,7 +59,9 @@ export function CacheSection({ record }: { record: ExecutionRecord }) {
 
           {cache.matched_prompt && (
             <blockquote className="border-l-2 border-cache pl-3 text-sm">
-              <span className="text-ink-faint">Matched prompt</span>
+              <span className="text-ink-faint">
+                {cache.hit ? "Matched prompt" : "Closest prompt, not used"}
+              </span>
               <span className="block text-ink">“{cache.matched_prompt}”</span>
             </blockquote>
           )}
@@ -69,7 +71,8 @@ export function CacheSection({ record }: { record: ExecutionRecord }) {
             <p className="text-sm text-ink-soft">This answer was stored for future lookups.</p>
           )}
           <p className="text-xs text-ink-faint">
-            The threshold is fixed when the LangCache service is created, not per request.
+            The lookup searches wider than this threshold and the hit is decided here, so a miss
+            still reports how close it came.
           </p>
         </div>
       )}

@@ -11,9 +11,17 @@ from app.telemetry.timing import Stopwatch
 class LangCacheService:
     """Semantic cache over Redis Iris LangCache.
 
-    The similarity threshold is fixed when the service is created in the Redis
-    Cloud console and cannot be passed per request. The configured value is
-    carried here only so the UI can show what a hit or miss was judged against.
+    Lookup searches at a deliberately low floor and applies the real threshold
+    here rather than letting the service decide. The service only returns
+    entries that clear the threshold it was searched with, so searching at the
+    decision threshold makes every miss indistinguishable from an empty cache —
+    the score that produced the miss is exactly what this project exists to
+    show. Searching low and judging locally keeps that number visible.
+
+    The floor is still a lower bound the service may refuse to go under: the
+    threshold set when the service was created in the Redis Cloud console may
+    clamp it. If misses keep arriving with no similarity at all, that clamp is
+    the reason, and the service has to be recreated to search any wider.
     """
 
     def __init__(self, settings: Settings) -> None:
@@ -24,11 +32,14 @@ class LangCacheService:
         )
         self.status = ComponentStatus.OK
         self.threshold = settings.langcache_similarity_threshold
+        self._search_floor = settings.langcache_search_floor
 
     async def lookup(self, prompt: str) -> CacheLookup:
         with Stopwatch() as timer:
             try:
-                result = await self._cache.search_async(prompt=prompt)
+                result = await self._cache.search_async(
+                    prompt=prompt, similarity_threshold=self._search_floor, max_results=1
+                )
             except Exception as exc:  # noqa: BLE001
                 return CacheLookup(
                     report=CacheReport(
@@ -39,8 +50,9 @@ class LangCacheService:
                     )
                 )
 
-        # An empty result set is a miss; the SDK returns no entries rather than
-        # an error when nothing clears the threshold.
+        # Nothing cleared even the floor, so there is no score to report: the
+        # nearest cached prompt is further away than the search was willing to
+        # look.
         entries = getattr(result, "data", None) or []
         if not entries:
             return CacheLookup(
@@ -53,12 +65,25 @@ class LangCacheService:
             )
 
         best = entries[0]
+        similarity = round(float(best.similarity), 4)
+        if similarity < self.threshold:
+            return CacheLookup(
+                report=CacheReport(
+                    status=ComponentStatus.OK,
+                    duration_ms=timer.elapsed_ms,
+                    hit=False,
+                    similarity=similarity,
+                    matched_prompt=best.prompt,
+                    threshold=self.threshold,
+                )
+            )
+
         return CacheLookup(
             report=CacheReport(
                 status=ComponentStatus.OK,
                 duration_ms=timer.elapsed_ms,
                 hit=True,
-                similarity=round(float(best.similarity), 4),
+                similarity=similarity,
                 matched_prompt=best.prompt,
                 threshold=self.threshold,
             ),

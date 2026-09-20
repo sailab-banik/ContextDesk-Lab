@@ -29,7 +29,7 @@ Its connection string becomes `REDIS_URL`.
 
 | Console page | Settings that matter | Copy into `.env` |
 |---|---|---|
-| **LangCache** | Select the `contextdesk` DB. Embedding provider: OpenAI (reuse `OPENAI_API_KEY`). **Similarity threshold: 0.92** — record whatever you pick, the UI must display it. TTL optional. | `LANGCACHE_ENDPOINT`, `LANGCACHE_ID`, `LANGCACHE_KEY` |
+| **LangCache** | Select the `contextdesk` DB. Embedding provider: OpenAI (reuse `OPENAI_API_KEY`). **Similarity threshold: pick the lowest you are comfortable with** — the app applies its own bar on top, but it cannot search below the one set here, and this one can only be changed by recreating the service. TTL optional. | `LANGCACHE_ENDPOINT`, `LANGCACHE_ID`, `LANGCACHE_KEY` |
 | **Agent Memory** | Select the `contextdesk` DB. Short-term TTL 1h, long-term TTL 365d (defaults are fine). | `AGENT_MEMORY_ENDPOINT`, `AGENT_MEMORY_STORE_ID`, `AGENT_MEMORY_KEY` |
 | **Context Retriever** | Requires data in Redis **first** — run the seed script before this step. Define the five entities below, then **Auto-detect fields**, then mark index types. | Agent key tab → **New Agent Key** → `CONTEXT_RETRIEVER_AGENT_KEY` |
 
@@ -50,11 +50,14 @@ Run `uv run python -m app.data.seed_redis` first, then register:
 The entity name is what the generated tool is named after, not the Python class: the ticket entity
 is registered as `Ticket` (not `SupportTicket`) so the generated tool matches
 `TOOL_FILTER_TICKETS` in `app/retrieval/context_retriever_client.py`. Whatever the console actually
-generates wins — `await UnifiedClient().list_tools(agent_key)` shows it, and the five `TOOL_*`
+generates wins — `uv run python -m app.data.inspect_surface` shows it, and the five `TOOL_*`
 constants are the one place to correct.
 
 A field belongs to exactly one index — marking it both TAG and TEXT errors. The index type decides
-which tool is generated (`TAG` → `filter_…`, `TEXT` → `search_…_by_text`, `NUMERIC` → `find_…_range`).
+what a field can be queried *by*, not how many tools exist: there is one `filter_<entity>` per
+entity, and each TAG field becomes an allowed `tag_conditions.field` value on it, each NUMERIC
+field a `numeric_conditions` entry, each TEXT field a field that `search_<entity>_by_text`
+searches. The entity segment is the class name lowercased, so `ApiUsage` gives `filter_apiusage`.
 
 **Done when:** `/health` reports all three components `OK` rather than `STUB`.
 
@@ -80,7 +83,7 @@ The word *again* is the whole point: it cannot be answered without history.
 ### 2. Structured retrieval — "What plan am I currently on?"
 
 - **Exercises:** Context Retrieval alone
-- **Retrieves:** Customer → Subscription (`get_customer_by_id`, `filter_subscription_by_customer_id`)
+- **Retrieves:** Customer → Subscription (`get_customer_by_id`, `filter_subscription`)
 - **Expected:** the plan name, from data — not from conversation history
 - **Contrast:** with retrieval disabled, the model cannot answer. That gap is the demonstration.
 

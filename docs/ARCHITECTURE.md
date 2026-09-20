@@ -68,6 +68,26 @@ and the context summary carries the same explanation so the inspector shows a
 reason rather than an empty panel. A hit that still did all the downstream work
 would save nothing and prove nothing.
 
+### Searching wider than the threshold
+
+The lookup searches at `LANGCACHE_SEARCH_FLOOR` (0.5) and decides the hit
+itself against `LANGCACHE_SIMILARITY_THRESHOLD` (0.92), rather than asking the
+service to apply the threshold.
+
+The service only returns entries that clear the threshold it was searched with,
+so searching at the decision threshold makes every miss come back empty — and a
+miss with no score is indistinguishable from an empty cache. The score that
+produced the miss is the single most interesting number the cache has, so the
+two are separated: the band between the floor and the threshold is the range of
+near-misses the inspector can show, and a miss reports both its similarity and
+the prompt it came closest to.
+
+This also makes the threshold tunable from `.env` without recreating the
+LangCache service. The floor is still a lower bound the service may refuse to
+go under — the threshold set at creation can clamp it. If misses keep arriving
+with no similarity at all, that clamp is why, and only re-provisioning widens
+it.
+
 ---
 
 ## 2. Service boundaries
@@ -266,9 +286,11 @@ Things that cost time to discover, encoded in the code:
 1. The Context Retriever **package** is `redis-context-retriever`; the **module**
    is `context_surfaces`.
 2. Every SDK call is async.
-3. LangCache's similarity threshold is fixed when the service is created and is
-   not a per-request argument. `LANGCACHE_SIMILARITY_THRESHOLD` records what you
-   chose so the UI can display it — it does not change the service.
+3. LangCache's **service-level** similarity threshold is fixed when the service
+   is created, but `search_async` takes a per-request `similarity_threshold`
+   (read side only — `set_async` has no such parameter). The service threshold
+   may still clamp how low a request can go. `LANGCACHE_SIMILARITY_THRESHOLD` is
+   the bar the app applies; `LANGCACHE_SEARCH_FLOOR` is how wide it searches.
 4. Agent Memory promotes session events to long-term memory asynchronously,
    minutes later. Nothing waits for it; `app/data/seed_memories.py` writes the
    demo's memories outright.
@@ -296,22 +318,41 @@ says.
 
 ### Generated tool names
 
-Context Retriever generates one MCP tool per entity and index type. The names
-the retrieval client calls are constants at the top of
+Context Retriever generates one MCP tool per entity **per capability, not per
+field**. The names the retrieval client calls are constants at the top of
 `app/retrieval/context_retriever_client.py`:
 
 ```python
 TOOL_GET_CUSTOMER        = "get_customer_by_id"
-TOOL_FILTER_SUBSCRIPTION = "filter_subscription_by_customer_id"
-TOOL_FILTER_API_USAGE    = "filter_api_usage_by_customer_id"
-TOOL_FILTER_TICKETS      = "filter_ticket_by_customer_id"
-TOOL_FILTER_INCIDENTS    = "filter_incident_by_region"
+TOOL_FILTER_SUBSCRIPTION = "filter_subscription"
+TOOL_FILTER_API_USAGE    = "filter_apiusage"
+TOOL_FILTER_TICKETS      = "filter_ticket"
+TOOL_FILTER_INCIDENTS    = "filter_incident"
 ```
 
-These follow the entity names registered in the Redis Cloud console. **If an
-entity is registered under a different name, correct these constants** — they
-are the one place tool names appear, and `UnifiedClient.list_tools(agent_key)`
-will show what was actually generated.
+Two things about these names are not guessable:
+
+- The entity segment is the **model class name lowercased**, not the key
+  template. `ApiUsage` yields `filter_apiusage`, never `filter_api_usage`.
+- There is **one filter tool per entity**. The field being matched on travels
+  in the request body, so declaring another tag index widens the existing
+  tool's `field` enum rather than generating a new tool.
+
+The filter tools therefore take a condition list rather than a named argument:
+
+```python
+{"tag_conditions": [{"field": "customer_id", "value": "CUST-1001"}]}
+```
+
+That envelope is built by `_tag_condition()` and never leaves the retrieval
+layer — `RetrievedSource.arguments` records the flat `{"customer_id": …}` pair
+so the inspector shows a readable query instead of a wire format.
+
+**Never infer a tool name or its argument shape.** Run
+`uv run python -m app.data.inspect_surface` and read the live schema: it prints
+every registered tool with its arguments and flags the ones the app calls.
+Tools come from the registered surface, not from `surface_models.py` on disk,
+so editing the models file changes nothing until the surface is re-registered.
 
 ---
 
@@ -329,7 +370,7 @@ behavior.
 | `LLM_INPUT_COST_PER_1M`, `LLM_OUTPUT_COST_PER_1M` | `app/telemetry/metrics.py` |
 | `CONTEXTDESK_STUB_MODE` | Every component factory |
 | `REDIS_URL` | `app/data/seed_redis.py` |
-| `LANGCACHE_*`, `LANGCACHE_SIMILARITY_THRESHOLD` | `app/cache/` |
+| `LANGCACHE_*`, `LANGCACHE_SIMILARITY_THRESHOLD`, `LANGCACHE_SEARCH_FLOOR` | `app/cache/` |
 | `AGENT_MEMORY_*`, `MEMORY_RESULT_LIMIT`, `MEMORY_RELEVANCE_THRESHOLD` | `app/memory/` |
 | `CONTEXT_RETRIEVER_AGENT_KEY`, `CONTEXT_RETRIEVER_*_URL` | `app/retrieval/` |
 | `CONTEXT_BUDGET_TOKENS` | `app/services/context_builder.py` |

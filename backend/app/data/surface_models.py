@@ -5,18 +5,24 @@ application. It tells Context Retriever which Redis keys hold which entities
 and which fields to index, and the index types decide which MCP tools get
 generated:
 
-    tag     -> filter_<entity>_by_<field>
-    text    -> search_<entity>_by_text
-    numeric -> find_<entity>_by_<field>_range
+    tag     -> filter_<entity>, as an allowed `tag_conditions.field` value
+    text    -> search_<entity>_by_text, as a field that tool searches
+    numeric -> filter_<entity>'s `numeric_conditions`, plus summarize_<entity>
+
+There is one filter tool per entity, not one per field: declaring another tag
+index widens the existing tool's `field` enum rather than generating a new
+tool.
 
 Three things here are contracts with code elsewhere and are not free to change
 on one side only:
 
 1. `__redis_key_template__` must match `KEY_TEMPLATES` in `seed_redis.py`,
    which is what actually writes the records.
-2. The class name determines the generated tool name, so it must match the
-   `TOOL_*` constants in `app/retrieval/context_retriever_client.py`. The
-   ticket entity is `Ticket`, not `SupportTicket`, for exactly this reason.
+2. The class name, **lowercased**, is the entity segment of every generated
+   tool name, so it must match the `TOOL_*` constants in
+   `app/retrieval/context_retriever_client.py`. The ticket entity is `Ticket`,
+   not `SupportTicket`, for exactly this reason. Lowercasing is all that
+   happens — `ApiUsage` yields `filter_apiusage`, not `filter_api_usage`.
 3. Field names and types mirror `app/models/domain.py`. A tag index over an
    int silently empties the entity's index, so every tag field is a `str`.
 """

@@ -57,12 +57,26 @@ async def test_stub_cache_reports_its_own_threshold_not_langcache_default(settin
     assert cache.threshold != settings.langcache_similarity_threshold
 
 
+async def test_a_near_miss_reports_the_score_that_produced_it(settings: Settings):
+    """A miss has to say how close it came, or the threshold is unreadable."""
+    cache = build_semantic_cache(settings)
+    await cache.store("how do I reset my password", "Use the sign-in page.")
+
+    lookup = await cache.lookup("what is my current api limit")
+
+    assert lookup.report.hit is False
+    assert lookup.response is None
+    assert lookup.report.similarity is not None
+    assert lookup.report.similarity < lookup.report.threshold
+    assert lookup.report.matched_prompt == "how do I reset my password"
+
+
 async def test_stub_retrieval_reports_the_tool_it_stands_in_for(settings: Settings):
     report = await build_retrieval_service(settings).retrieve_customer_context("CUST-1001")
 
     tools = {source.name: source.tool for source in report.sources}
     assert tools["customer"] == "get_customer_by_id"
-    assert tools["regional_incidents"] == "filter_incident_by_region"
+    assert tools["regional_incidents"] == "filter_incident"
     assert report.status is ComponentStatus.STUB
 
 

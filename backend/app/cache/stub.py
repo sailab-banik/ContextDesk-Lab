@@ -36,7 +36,11 @@ class StubSemanticCache:
                     status=ComponentStatus.STUB,
                     duration_ms=timer.elapsed_ms,
                     hit=False,
+                    # The nearest prompt is reported on a miss as well as a hit,
+                    # matching LangCache, so the inspector reads the same in
+                    # either mode.
                     similarity=round(best[0], 4) if best else None,
+                    matched_prompt=best[1] if best else None,
                     threshold=self.threshold,
                 )
             )

@@ -25,6 +25,7 @@ backend, `FRONTEND_GUIDE.md` for the frontend). This file is how to work in the 
 | Run backend tests | `cd backend && uv run pytest` |
 | Lint frontend | `cd frontend && npm run lint` |
 | Load synthetic data into Redis | `cd backend && uv run python -m app.data.seed_redis` |
+| List the surface's real MCP tools | `cd backend && uv run python -m app.data.inspect_surface` |
 
 Python is managed entirely by `uv` and `pyproject.toml`. Never use `pip`, `virtualenv`, or a
 `requirements.txt`.
@@ -64,7 +65,7 @@ backend/
     llm/             LLM provider abstraction
     telemetry/       execution record + metrics
     models/          request / response models
-    data/            synthetic data + seed_redis.py
+    data/            synthetic data, seed_redis.py, inspect_surface.py
   tests/
 frontend/
   app/               page.tsx (console), compare/, analytics/ + [requestId] (replay), lab/[component]
@@ -141,16 +142,33 @@ await tools.query_tool(agent_key=..., tool_name=..., arguments={...})
 
 1. The Context Retriever package is `redis-context-retriever` but the module is `context_surfaces`.
 2. Every SDK call is **async** (`*_async`; `query_tool` is already a coroutine).
-3. LangCache's **similarity threshold is fixed when the service is created** (0.5–1.0, default
-   0.92) — it is not a per-request argument. Experiment Mode can show the score, but cannot tune
-   the threshold without recreating the service.
+3. LangCache's **service-level similarity threshold is fixed when the service is created**
+   (0.5–1.0, default 0.92), but `search_async` *does* take a per-request `similarity_threshold`
+   (it is a read-side argument only; `set_async` has no such parameter). The service threshold may
+   still clamp how low a request can go. `app/cache/langcache_client.py` searches at a low floor
+   and decides the hit itself, because a search made at the decision threshold returns nothing on
+   a miss — and a miss with no score is the one thing this project cannot afford to hide.
 4. Agent Memory promotes session → long-term memory **asynchronously, minutes later**. Demos must
    not depend on it. Seed long-term memories directly with
    `bulk_create_long_term_memories_async`.
 5. Context Retriever reads data **already in Redis** under key templates (`customer:{id}`), and
-   generates MCP tools named `get_<entity>_by_id`, `filter_<entity>_by_<field>`,
-   `search_<entity>_by_text`, `find_<entity>_by_<field>_range`. Results arrive MCP-shaped and must
-   be unwrapped before leaving the retrieval layer:
+   generates one MCP tool per entity **per capability, not per field**:
+
+   | Tool | Arguments |
+   |---|---|
+   | `get_<entity>_by_id` | `{"id": "..."}` — the key component only, never `customer:3` |
+   | `filter_<entity>` | `{"tag_conditions": [{"field": ..., "value": ...}]}`, plus `numeric_conditions`, `limit` (default 10, max 100), `offset`, `sort_by` |
+   | `search_<entity>_by_text` | `{"query": ..., "match_mode": "any\|all\|phrase"}` — lexical, not semantic |
+   | `list_<entity>` / `summarize_<entity>` | listing and `sum`/`avg`/`min`/`max` with `group_by` |
+   | `intersect_results` / `union_results` | AND / OR across sets from different entities |
+
+   The entity segment is the **class name lowercased**, so `ApiUsage` becomes `apiusage` — it does
+   not follow the `api_usage:{id}` key template. Tools come from the **registered surface**, not
+   from `surface_models.py` on disk, so editing the models file changes nothing until the surface
+   is re-registered. Never infer a tool name or its arguments: run
+   `uv run python -m app.data.inspect_surface` and read the live schema.
+
+   Results arrive MCP-shaped and must be unwrapped before leaving the retrieval layer:
 
    ```python
    json.loads(response["content"][0]["text"])["results"]
