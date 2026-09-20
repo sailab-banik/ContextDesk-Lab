@@ -244,7 +244,7 @@ function SourceRow({ source }: { source: RetrievedSource }) {
                 {Object.entries(row).map(([field, value]) => (
                   <div key={field} className="contents">
                     <dt className="truncate font-mono text-ink-faint">{field}</dt>
-                    <dd className="min-w-0 break-words text-ink">{String(value)}</dd>
+                    <dd className="min-w-0 wrap-break-word text-ink">{String(value)}</dd>
                   </div>
                 ))}
               </dl>
